@@ -1,0 +1,293 @@
+#include <GL/glut.h>
+#include <cmath>
+#include <ctime>
+#include <cstdlib>
+
+// Transition state
+float transition = 0.0f; // 0 = day, 1 = night
+bool goingToNight = false;
+float transitionSpeed = 0.005f;
+
+float ghostY = 0.0f;
+float timeCount = 0.0f;
+float lightningAlpha = 0.0f;
+float cloudOffset = 0.0f;
+
+
+void drawCircle(float cx, float cy, float r, int segments) {
+    glBegin(GL_POLYGON);
+    for (int i = 0; i < segments; ++i) {
+        float theta = 2.0f * 3.1415926f * float(i) / float(segments);
+        float x = r * cosf(theta);
+        float y = r * sinf(theta);
+        glVertex2f(x + cx, y + cy);
+    }
+    glEnd();
+}
+
+void drawSky() {
+    float r = 0.5f * (1 - transition) + 0.05f * transition;
+    float g = 0.8f * (1 - transition) + 0.05f * transition;
+    float b = 1.0f * (1 - transition) + 0.15f * transition;
+    glClearColor(r, g, b, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+}
+
+void drawSunMoon() {
+    float sunR = 1.0f;
+    float sunG = 1.0f - transition;
+    float sunB = 0.0f;
+    glColor3f(sunR, sunG, sunB);
+    drawCircle(-0.8f, 0.8f, 0.1f, 100);
+}
+
+void drawStars() {
+    if (transition < 0.1f) return;
+
+    glColor4f(1.0f, 1.0f, 1.0f, transition);
+    glPointSize(2);
+    glBegin(GL_POINTS);
+    for (int i = 0; i < 100; i++) {
+        float x = (rand() % 200 - 100) / 100.0f;
+        float y = (rand() % 100) / 100.0f;
+        glVertex2f(x, y);
+    }
+    glEnd();
+}
+void drawCloud(float x, float y, float scale) {
+    glColor4f(1.0f, 1.0f, 1.0f, 1.0f - transition); // Fade out as it gets dark
+    drawCircle(x, y, 0.05f * scale, 20);
+    drawCircle(x + 0.04f * scale, y + 0.01f * scale, 0.04f * scale, 20);
+    drawCircle(x - 0.04f * scale, y + 0.01f * scale, 0.04f * scale, 20);
+    drawCircle(x, y + 0.02f * scale, 0.03f * scale, 20);
+}
+
+void drawClouds() {
+    if (transition > 0.95f) return; // Hide at full night
+
+    float baseY = 0.7f;
+    drawCloud(-0.6f + cloudOffset, baseY, 1.0f);
+    drawCloud(0.0f + cloudOffset * 0.5f, baseY + 0.05f, 0.8f);
+    drawCloud(0.5f + cloudOffset * 1.2f, baseY - 0.02f, 1.2f);
+}
+
+
+void drawHouse() {
+    // Base - First Floor
+    glColor3f(0.3f, 0.3f, 0.3f); // darker walls
+    glBegin(GL_QUADS);
+    glVertex2f(-0.4f, -0.5f); glVertex2f(0.4f, -0.5f);
+    glVertex2f(0.4f, 0.0f); glVertex2f(-0.4f, 0.0f);
+    glEnd();
+
+    // Second Floor
+    glColor3f(0.35f, 0.35f, 0.35f);
+    glBegin(GL_QUADS);
+    glVertex2f(-0.3f, 0.0f); glVertex2f(0.3f, 0.0f);
+    glVertex2f(0.3f, 0.3f); glVertex2f(-0.3f, 0.3f);
+    glEnd();
+
+    // Uneven roof (haunted style)
+    glColor3f(0.15f, 0.05f, 0.0f);
+    glBegin(GL_POLYGON);
+    glVertex2f(-0.35f, 0.3f);
+    glVertex2f(-0.2f, 0.35f);
+    glVertex2f(0.0f, 0.5f);
+    glVertex2f(0.2f, 0.35f);
+    glVertex2f(0.35f, 0.3f);
+    glEnd();
+
+    // Broken windows glow
+    float glow = transition;
+    glColor3f(glow, glow, 0.0f); // yellowish glow
+
+    // First floor windows
+    glBegin(GL_QUADS);
+    glVertex2f(-0.3f, -0.2f); glVertex2f(-0.1f, -0.2f);
+    glVertex2f(-0.1f, -0.05f); glVertex2f(-0.3f, -0.05f);
+    glEnd();
+
+    glBegin(GL_QUADS);
+    glVertex2f(0.1f, -0.2f); glVertex2f(0.3f, -0.2f);
+    glVertex2f(0.3f, -0.05f); glVertex2f(0.1f, -0.05f);
+    glEnd();
+
+    // Second floor windows (small and high)
+    glBegin(GL_QUADS);
+    glVertex2f(-0.2f, 0.05f); glVertex2f(-0.05f, 0.05f);
+    glVertex2f(-0.05f, 0.2f); glVertex2f(-0.2f, 0.2f);
+    glEnd();
+
+    glBegin(GL_QUADS);
+    glVertex2f(0.05f, 0.05f); glVertex2f(0.2f, 0.05f);
+    glVertex2f(0.2f, 0.2f); glVertex2f(0.05f, 0.2f);
+    glEnd();
+
+    // Door
+    glColor3f(0.2f, 0.1f, 0.0f); // dark wood
+    glBegin(GL_QUADS);
+    glVertex2f(-0.05f, -0.5f); glVertex2f(0.05f, -0.5f);
+    glVertex2f(0.05f, -0.2f); glVertex2f(-0.05f, -0.2f);
+    glEnd();
+
+    // Cracks (lines)
+    glColor3f(0.0f, 0.0f, 0.0f);
+    glBegin(GL_LINES);
+    glVertex2f(-0.2f, -0.3f); glVertex2f(-0.15f, -0.25f);
+    glVertex2f(0.25f, 0.1f); glVertex2f(0.2f, 0.15f);
+    glEnd();
+
+    // Spider Web - Top Right Corner
+    if (transition > 0.5f) {
+        glColor3f(1.0f, 1.0f, 1.0f);
+        float x = 0.3f, y = 0.3f;
+        for (float r = 0.01f; r < 0.05f; r += 0.01f) {
+            drawCircle(x, y, r, 12);
+        }
+        glBegin(GL_LINES);
+        glVertex2f(x, y); glVertex2f(x + 0.05f, y);
+        glVertex2f(x, y); glVertex2f(x, y - 0.05f);
+        glVertex2f(x, y); glVertex2f(x - 0.035f, y - 0.035f);
+        glEnd();
+    }
+
+    // Graveyard (outside house)
+    glColor3f(0.2f, 0.2f, 0.2f);
+    for (float gx = -0.75f; gx < -0.4f; gx += 0.1f) {
+        glBegin(GL_QUADS);
+        glVertex2f(gx, -0.5f); glVertex2f(gx + 0.02f, -0.5f);
+        glVertex2f(gx + 0.02f, -0.4f); glVertex2f(gx, -0.4f);
+        glEnd();
+    }
+}
+
+void drawSurroundings() {
+    // Ground
+    if (transition < 0.5f)
+        glColor3f(0.2f, 0.2f, 0.2f);  // Dark for night
+    else
+        glColor3f(0.3f, 0.5f, 0.3f);  // Green for day
+
+    glBegin(GL_QUADS);
+    glVertex2f(-1.0f, -1.0f);
+    glVertex2f(1.0f, -1.0f);
+    glVertex2f(1.0f, -0.5f);
+    glVertex2f(-1.0f, -0.5f);
+    glEnd();
+
+    // Fence
+    glColor3f(0.2f, 0.1f, 0.0f);
+    for (float x = -0.9f; x <= 0.9f; x += 0.05f) {
+        glBegin(GL_QUADS);
+        glVertex2f(x, -0.5f);
+        glVertex2f(x + 0.01f, -0.5f);
+        glVertex2f(x + 0.01f, -0.4f);
+        glVertex2f(x, -0.4f);
+        glEnd();
+    }
+
+    // Graveyard left side
+    glColor3f(0.25f, 0.25f, 0.25f);
+    for (float gx = -0.85f; gx < -0.5f; gx += 0.1f) {
+        glPushMatrix();
+        glTranslatef(gx, -0.5f, 0);
+        glRotatef(-10, 0, 0, 1);
+        glBegin(GL_QUADS);
+        glVertex2f(0.0f, 0.0f);
+        glVertex2f(0.03f, 0.0f);
+        glVertex2f(0.03f, 0.08f);
+        glVertex2f(0.0f, 0.08f);
+        glEnd();
+        glPopMatrix();
+    }
+
+    // Spooky trees
+    glColor3f(0.1f, 0.05f, 0.0f);
+    for (float tx = 0.6f; tx < 0.95f; tx += 0.2f) {
+        glBegin(GL_LINES);
+        glVertex2f(tx, -0.5f); glVertex2f(tx, -0.2f); // trunk
+        glVertex2f(tx, -0.3f); glVertex2f(tx + 0.05f, -0.25f); // branch right
+        glVertex2f(tx, -0.3f); glVertex2f(tx - 0.05f, -0.25f); // branch left
+        glEnd();
+    }
+}
+
+
+
+void drawGhost() {
+    if (transition < 0.5f) return;
+
+    float y = 0.0f + sin(timeCount) * 0.05f;
+    glColor4f(1.0f, 1.0f, 1.0f, transition);
+    drawCircle(0.0f, y + 0.3f, 0.07f, 50);
+
+    // Eyes
+    glColor3f(0.0f, 0.0f, 0.0f);
+    drawCircle(-0.02f, y + 0.32f, 0.008f, 10);
+    drawCircle(0.02f, y + 0.32f, 0.008f, 10);
+}
+
+void drawLightning() {
+    if (transition < 0.8f) return;
+
+    lightningAlpha -= 0.03f;
+    if (rand() % 100 < 2) lightningAlpha = 1.0f;
+
+    if (lightningAlpha > 0.0f) {
+        glColor4f(1.0f, 1.0f, 1.0f, lightningAlpha);
+        glBegin(GL_LINES);
+        glVertex2f(0.0f, 1.0f);
+        glVertex2f(-0.1f, 0.5f);
+        glVertex2f(-0.1f, 0.5f);
+        glVertex2f(0.1f, 0.3f);
+        glEnd();
+    }
+}
+
+void display() {
+    drawSky();
+    drawClouds(); 
+    drawSunMoon();
+    drawStars();
+    drawHouse();
+    drawSurroundings();
+    drawGhost();
+    drawLightning();
+    glutSwapBuffers();
+}
+
+void timer(int) {
+    if (goingToNight && transition < 1.0f) transition += transitionSpeed;
+    if (!goingToNight && transition > 0.0f) transition -= transitionSpeed;
+    
+    cloudOffset += 0.0005f;
+    if (cloudOffset > 2.0f) cloudOffset = -2.0f;
+
+
+    if (transition > 1.0f) transition = 1.0f;
+    if (transition < 0.0f) transition = 0.0f;
+
+    timeCount += 0.1f;
+    glutPostRedisplay();
+    glutTimerFunc(1000 / 60, timer, 0);
+}
+
+void keyboard(unsigned char key, int x, int y) {
+    if (key == 'n' || key == 'N') goingToNight = true;
+    if (key == 'd' || key == 'D') goingToNight = false;
+}
+
+int main(int argc, char** argv) {
+    srand(time(0));
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
+    glutInitWindowSize(800, 600);
+    glutCreateWindow("Haunted House - Smooth Day to Night Transition");
+
+    glutDisplayFunc(display);
+    glutKeyboardFunc(keyboard);
+    glutTimerFunc(0, timer, 0);
+
+    glutMainLoop();
+    return 0;
+}
